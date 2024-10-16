@@ -1,0 +1,256 @@
+---
+title: "Final Assignment Arthur WEHBE"
+author: "Arthur WEHBE"
+date: "2024-05-19"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# Introduction
+
+This assignment involves two tasks: clustering and principal components analysis (PCA). The purpose of this assignment is to demonstrate the ability to analyze data using these techniques and to present the findings in a clear and detailed report.
+
+# Question 1: Clustering
+
+## Dataset Overview
+
+The `pottery.csv` dataset contains the chemical composition of Romano-British pottery, with measurements for nine different oxides and the location (kiln) where each piece of pottery was found.
+
+## 1. Explore the Dataset
+
+```{r}
+
+getwd()
+
+library(ggplot2)
+library(cluster)
+library(factoextra)
+library(dendextend)
+
+pottery <- read.csv('pottery.csv')
+
+head(pottery)
+
+summary(pottery)
+
+
+pairs(pottery[,2:10], main="Pair Plot of Oxides in Pottery")
+
+```
+
+## 2. Data Preparation
+
+HEre we use standardisation because varaible like Al203 and Fe203 have different ranges which can disproportionate the further analysis and the clustering. After standartisation all data will have amean of 0 and a standard deviation of 1 which will make comparison and analysis relevant and accurate.
+
+```{r}
+pottery_data <- pottery[, -1]
+
+pottery_scaled <- scale(pottery_data)
+
+head(pottery_scaled)
+
+```
+
+
+## 3. Hierarchical Clustering 
+
+There seems to have 3 cluster in the dataset from analysing the dendogram.
+
+```{r}
+hclust_res <- hclust(dist(pottery_scaled), method = "average")
+plot(hclust_res, main = "Dendrogram of Hierarchical Clustering", xlab = "", sub = "", cex = 0.6)
+
+rect.hclust(hclust_res, k = 3, border = 2:4)  # Cutting dendrogram at 3 clusters
+
+clusters_hierarchical <- cutree(hclust_res, k = 3)
+pottery$Cluster_Hierarchical <- clusters_hierarchical
+
+head(pottery)
+
+```
+
+
+## 4. K-means Clustering
+
+With  this type of clustering we can also see that there is 3 clusters in the dataset. The decision for k = 3 comes from the elbow method displaying clear "elbow" at k = 3.
+```{r}
+set.seed(123)
+
+kmeans_res <- kmeans(pottery_scaled, centers = 3, nstart = 25)
+pottery$Cluster_KMeans <- kmeans_res$cluster
+
+fviz_cluster(kmeans_res, data = pottery_scaled, main = "K-means Clustering")
+
+```
+
+
+## 5. Comparing clustering 
+
+The ageement between the hierarchical and K-means clustering solutions is pretty high, as shown by the results of the contingency table. Most of the pots classified in cluster 1 by hierarchical clustering are also in cluster 2 by K-means (22 out of 38), and cluster 3 in hierarchical clustering aligns perfectly with cluster 3 in K-means (10 out of 10). However, there is a small differences in cluster 2 of hierarchical clustering, where one pot overlaps with cluster 1 in K-means.
+
+```{r}
+table(clusters_hierarchical, kmeans_res$cluster)
+```
+
+
+## 6. Relation between clustering and 'kiln'
+
+The relationship between both clustering solutions and the 'kiln' variable reveals some alignment, but notable differences exist. Hierarchical clustering groups Caldicot and Thorns together primarily, while K-means separates Caldicot into its own cluster. While there is some consistency, minor differences suggest potential variability in cluster assignments, raising concerns about the reproducibility of the clustering solutions, particularly when different methods or parameters are employed.
+
+```{r}
+# Relationship with 'kiln'
+table(pottery$Cluster_Hierarchical, pottery$kiln)
+table(pottery$Cluster_KMeans, pottery$kiln)
+
+```
+
+
+
+
+
+
+# Question 2 : Principal Components Analysis
+
+
+##1. Introduction 
+
+Principal Component Analysis (PCA) is a technique used to reduce the dimensionality of a dataset while retaining as much variances as possible.  This is particularly useful when dealing with datasets that have many variables.
+
+
+## 2. Data Exploration 
+
+The Decathlon Olympics dataset comprises the performance scores of 28 athletes across ten different events. To gain insights into the data, we conducted an initial exploration:
+
+The dataset was loaded and examined using the head() and summary() functions.
+Numeric columns were isolated to visualize the pairwise relationships between variables using a pair plot.
+
+```{r}
+library(FactoMineR)
+library(factoextra)
+
+data(decathlon)
+
+head(decathlon)
+
+summary(decathlon)
+
+numeric_cols <- decathlon[, sapply(decathlon, is.numeric)]
+
+pair_plot <- pairs(numeric_cols, main = "Pair Plot of Decathlon Events")
+
+pair_plot
+```
+
+
+## 3. Methodology
+
+The dataset was preprocessed by extracting only the columns corresponding to the ten events.
+
+The data was then standardized to ensure that each variable contributes equally to the analysis.
+
+PCA was performed on the standardized dataset using the PCA() function from the FactoMineR package.
+
+Eigenvalues and contributions of variables to principal components were visualized using scree plots and variable contributions plots, respectively.
+
+A biplot was generated to visualize the relationship between individuals and variables in the principal component space.
+
+```{r}
+
+decathlon_data <- decathlon[, -11]
+
+decathlon_data <- as.data.frame(sapply(decathlon_data, as.numeric))
+
+if (anyNA(decathlon_data)) {
+  decathlon_data <- apply(decathlon_data, 2, function(x) {
+    ifelse(is.na(x), mean(x, na.rm = TRUE), x)
+  })
+}
+
+decathlon_scaled <- scale(decathlon_data)
+
+head_scaled_data <- head(decathlon_scaled)
+```
+
+## 4. Results
+
+Scree Plot: The scree plot revealed the variance explained by each principal component, allowing us to determine the number of significant components with dimension 1 in first with 35.6%.
+
+Variable Contributions: The contributions of variables to each principal component were visualized, providing insights into which events contribute most to the variability in the dataset. For the frist dimension it is Points by far then 100M, Long Jump, 110 M hurde, 400M and Short Put pretty close. For the 2nd Dimension it is Shot put, Discuss 400 M pretty simiar in terms of contrivution then 1500M.
+
+Biplot: The biplot displayed the relationship between athletes and events in the principal component space, facilitating the interpretation of athlete performance across different events.
+
+```{r}
+pca_res <- PCA(decathlon_scaled, graph = FALSE)
+
+scree_plot <- fviz_eig(pca_res, addlabels = TRUE, ylim = c(0, 50), main = "Scree Plot")
+
+scree_plot
+
+var <- get_pca_var(pca_res)
+
+contrib_pc1 <- fviz_contrib(pca_res, choice = "var", axes = 1, top = 10)
+
+contrib_pc1
+
+contrib_pc2 <-fviz_contrib(pca_res, choice = "var", axes = 2, top = 10)
+
+contrib_pc2
+
+biplot<- fviz_pca_biplot(pca_res, repel = TRUE, title = "PCA Biplot")
+
+biplot
+
+decathlon$Rank <- factor(decathlon$Rank)
+
+
+decathlon$PC1 <- pca_res$ind$coord[, 1]
+decathlon$PC2 <- pca_res$ind$coord[, 2]
+
+head_with_pca_scores <- head(decathlon)
+
+head_with_pca_scores
+
+athletes_plot <- ggplot(decathlon, aes(x = PC1, y = PC2, color = Rank)) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(title = "Athletes' Scores on PC1 and PC2",
+       x = "PC1",
+       y = "PC2",
+       color = "Rank")
+
+athletes_plot
+
+```
+
+## 5. Conclusion
+
+PCA provided valuable insights into the structure of the Decathlon Olympics dataset:
+
+It revealed the underlying patterns in athlete performance across events.
+It identified the key events driving the variability in the dataset.
+It allowed for the visualization of athlete performance in a reduced-dimensional space.
+PCA proved to be a useful tool for analyzing and understanding the complex relationships within the Decathlon Olympics dataset, providing a foundation for further analysis and interpretation.
+
+```{r}
+points_plot <- ggplot(decathlon, aes(x = PC1, y = Points)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Relationship between PC1 and Total Points",
+       x = "PC1",
+       y = "Total Points")
+
+output_list <- list( pair_plot, head_scaled_data, scree_plot, contrib_pc1, contrib_pc2, biplot, head_with_pca_scores, athletes_plot, points_plot)
+
+output_list
+```
+
+
+## 6. Summary 
+
+In summary, the application of PCA to the Decathlon Olympics dataset yielded valuable insights into athlete performance, event contributions, and underlying patterns. By reducing the dimensionality of the data, PCA enabled a clearer understanding of the relationships between athletes and events, ultimately enhancing our ability to interpret and analyze the dataset.
+
